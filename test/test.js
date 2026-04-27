@@ -72,6 +72,13 @@ describe('follow-redirect-url', () => {
     });
   });
 
+  it('should attach custom headers to requests', () => {
+    const options = { headers: { 'X-Test': '1' } };
+    return follower.startFollowing('http://localhost:9000/needs-header', options).then(visits => {
+      expect(visits[0].status).to.equal(200);
+    });
+  });
+
   it('should reject invalid URLs', () => {
     return follower.startFollowing('bogus://something').then(visits => {
       return expect(visits).to.deep.oneOf([

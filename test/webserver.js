@@ -10,6 +10,14 @@ const start = () => {
 
   app.get('/meta', (req, res) => res.send('<META http-equiv="refresh" content="0; url=http://localhost:9000/1">'));
 
+  app.get('/needs-header', (req, res) => {
+    if (req.get('X-Test') === '1') {
+      res.send("ok");
+    } else {
+      res.status(400).send("missing header");
+    }
+  });
+
   app.get('/:number', (req, res) => {
     let number = req.params.number;
     if (number > 1) {

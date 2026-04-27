@@ -50,7 +50,7 @@ const visit = (url, fetchOptions) =>
                     status: "200 + META REFRESH",
                     redirectUrl: redirectUrl,
                   }
-                : { url: url, redirect: false, status: response.status }
+                : { url: url, redirect: false, status: response.status },
             );
           });
         } else {
@@ -64,13 +64,14 @@ const _startFollowingRecursively = (
   url,
   options = {},
   count = 1,
-  visits = []
+  visits = [],
 ) =>
   new Promise((resolve, reject) => {
     const {
       max_redirect_length = 20,
       request_timeout = 10000,
       ignoreSslErrors = false,
+      headers: extraHeaders = {},
     } = options;
     const userAgent =
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.109 Safari/537.36";
@@ -81,6 +82,7 @@ const _startFollowingRecursively = (
       headers: {
         "User-Agent": userAgent,
         Accept: "text/html",
+        ...extraHeaders,
       },
       // https://stackoverflow.com/questions/52478069/node-fetch-disable-ssl-verification
       agent: (parsedUrl) => {
@@ -91,7 +93,7 @@ const _startFollowingRecursively = (
         } else {
           return new http.Agent();
         }
-      }
+      },
     };
 
     if (count > max_redirect_length) {
@@ -106,11 +108,16 @@ const _startFollowingRecursively = (
         resolve(
           response.redirect
             ? _startFollowingRecursively(url, options, count, visits)
-            : visits
+            : visits,
         );
       })
       .catch((error) => {
-        visits.push({ url: url, redirect: false, error: error.code, status: `Error: ${error}` });
+        visits.push({
+          url: url,
+          redirect: false,
+          error: error.code,
+          status: `Error: ${error}`,
+        });
         resolve(visits);
       });
   });
