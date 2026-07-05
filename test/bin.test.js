@@ -6,6 +6,7 @@ const path = require('node:path');
 const chai = require('chai');
 const expect = chai.expect;
 const webserver = require('./webserver');
+const { version } = require('../package.json');
 
 const bin_path = path.join(__dirname, '..', 'bin.js');
 const execFile = promisify(execFileCb);
@@ -36,7 +37,32 @@ describe('bin', () => {
   it('should print usage and exit 1 when URL is missing', async () => {
     const result = await runBin([]);
     expect(result.code).to.equal(1);
-    expect(result.stdout).to.equal('Usage: follow <URL> [-H "Header: value"]...');
+    expect(result.stdout).to.include('Usage: follow <URL>');
+    expect(result.stdout).to.include('follow doctor');
+  });
+
+  it('should print version and exit 0 for --version', async () => {
+    const result = await runBin(['--version']);
+    expect(result.code).to.equal(0);
+    expect(result.stdout).to.equal(`follow-redirect-url/${version}`);
+  });
+
+  it('should print version for -v and -V', async () => {
+    const shortResult = await runBin(['-v']);
+    const upperResult = await runBin(['-V']);
+    expect(shortResult.stdout).to.equal(`follow-redirect-url/${version}`);
+    expect(upperResult.stdout).to.equal(`follow-redirect-url/${version}`);
+  });
+
+  it('should run doctor and report install status', async () => {
+    const result = await runBin(['doctor']);
+    expect([0, 1]).to.include(result.code);
+    expect(result.stdout).to.include(`follow-redirect-url ${version}`);
+    if (result.code === 0) {
+      expect(result.stdout).to.include('Status: OK');
+    } else {
+      expect(result.stdout).to.include('WARNING');
+    }
   });
 
   it('should exit 2 for unknown options', async () => {

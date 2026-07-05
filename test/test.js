@@ -1,6 +1,12 @@
 'use strict';
 
 const follower = require('../follow-redirect-url');
+const {
+  resolveRedirectUrl,
+  extractMetaRefreshUrl,
+  getSecFetchSite,
+  DEFAULT_USER_AGENT,
+} = require('../follow-redirect-url');
 const chai = require('chai');
 const expect = chai.expect;
 const webserver = require('./webserver');
@@ -115,6 +121,134 @@ describe('follow-redirect-url', () => {
         { url: 'http://localhost:9000/1', redirect: false, status: 200 },
       ]);
     });
+  });
+
+  it('should send a modern Chrome User-Agent by default', async () => {
+    const visits = await follower.startFollowing('http://localhost:9000/check-ua');
+    expect(visits[0].status).to.equal(200);
+  });
+
+  it('should follow percent-encoded relative redirects', async () => {
+    const visits = await follower.startFollowing('http://localhost:9000/article/123');
+    expect(visits).to.deep.equal([
+      {
+        url: 'http://localhost:9000/article/123',
+        redirect: true,
+        status: 301,
+        redirectUrl: 'http://localhost:9000/article/123/%D9%85%D8%AD%D9%85%D8%AF',
+      },
+      {
+        url: 'http://localhost:9000/article/123/%D9%85%D8%AD%D9%85%D8%AF',
+        redirect: false,
+        status: 200,
+      },
+    ]);
+  });
+
+  it('should resolve unicode paths in Location headers', async () => {
+    const visits = await follower.startFollowing('http://localhost:9000/unicode-redirect');
+    expect(visits).to.deep.equal([
+      {
+        url: 'http://localhost:9000/unicode-redirect',
+        redirect: true,
+        status: 302,
+        redirectUrl:
+          'http://localhost:9000/article/123/%D9%85%D8%AD%D9%85%D8%AF-%D8%B5%D9%84%D8%A7%D8%AD',
+      },
+      {
+        url: 'http://localhost:9000/article/123/%D9%85%D8%AD%D9%85%D8%AF-%D8%B5%D9%84%D8%A7%D8%AD',
+        redirect: false,
+        status: 200,
+      },
+    ]);
+    for (const hop of visits) {
+      expect(hop.url).to.not.include('http:///');
+      if (hop.redirectUrl) {
+        expect(hop.redirectUrl).to.not.include('http:///');
+      }
+    }
+  });
+
+  it('should send same-origin Sec-Fetch-Site and Referer on redirect hops', async () => {
+    const visits = await follower.startFollowing('http://localhost:9000/redirect-hop');
+    expect(visits).to.deep.equal([
+      {
+        url: 'http://localhost:9000/redirect-hop',
+        redirect: true,
+        status: 302,
+        redirectUrl: 'http://localhost:9000/redirect-hop/land',
+      },
+      { url: 'http://localhost:9000/redirect-hop/land', redirect: false, status: 200 },
+    ]);
+  });
+
+  it('should follow uppercase URL= meta refresh redirects', async () => {
+    const visits = await follower.startFollowing('http://localhost:9000/meta-arabic-upper');
+    expect(visits[0].redirectUrl).to.equal(
+      'http://localhost:9000/article/123/%D9%85%D8%AD%D9%85%D8%AF',
+    );
+    expect(visits[visits.length - 1].status).to.equal(200);
+  });
+
+  it('should resolve relative redirects with resolveRedirectUrl', () => {
+    const resolved = resolveRedirectUrl(
+      'https://www.mobtada.com/sports/1199729',
+      '/sports/1199729/%D9%85%D8%AD%D9%85%D8%AF',
+    );
+    expect(resolved).to.equal(
+      'https://www.mobtada.com/sports/1199729/%D9%85%D8%AD%D9%85%D8%AF',
+    );
+    expect(resolved).to.not.include('http:///');
+  });
+
+  it('should extract meta refresh URLs from alternate tag attribute order', () => {
+    const html =
+      '<meta content="0; url=/article/123/%D9%85%D8%AD%D9%85%D8%AF" http-equiv="refresh">';
+    expect(extractMetaRefreshUrl(html)).to.equal('/article/123/%D9%85%D8%AD%D9%85%D8%AF');
+  });
+
+  it('should use Chrome 149 default user agent', () => {
+    expect(DEFAULT_USER_AGENT).to.include('Chrome/149');
+    expect(DEFAULT_USER_AGENT).to.not.include('Chrome/72');
+  });
+
+  it('should classify sec-fetch-site for redirect hops', () => {
+    expect(getSecFetchSite('http://localhost:9000/1', null)).to.equal('none');
+    expect(
+      getSecFetchSite('http://localhost:9000/2', 'http://localhost:9000/1'),
+    ).to.equal('same-origin');
+    expect(
+      getSecFetchSite('https://example.com/', 'http://localhost:9000/1'),
+    ).to.equal('cross-site');
+  });
+
+  it('should detect cloudflare blocks', async () => {
+    const visits = await follower.startFollowing('http://localhost:9000/cloudflare-block');
+    expect(visits).to.deep.equal([
+      {
+        url: 'http://localhost:9000/cloudflare-block',
+        redirect: false,
+        status: 403,
+        blocked: 'cloudflare',
+      },
+    ]);
+  });
+
+  it('should follow relative arabic meta refresh redirects', async () => {
+    const visits = await follower.startFollowing('http://localhost:9000/meta-arabic');
+    expect(visits).to.deep.equal([
+      {
+        url: 'http://localhost:9000/meta-arabic',
+        redirect: true,
+        status: '200 + META REFRESH',
+        redirectUrl: 'http://localhost:9000/article/123/%D9%85%D8%AD%D9%85%D8%AF',
+      },
+      {
+        url: 'http://localhost:9000/article/123/%D9%85%D8%AD%D9%85%D8%AF',
+        redirect: false,
+        status: 200,
+      },
+    ]);
   });
 
   it('should ignore SSL errors when configured', async () => {

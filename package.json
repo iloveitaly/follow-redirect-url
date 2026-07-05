@@ -3,6 +3,12 @@
   "version": "2.1.0",
   "description": "A simple command-line utility that lets you follow redirects to see where http URLs end up. Useful for shortened URLs.",
   "main": "lib.js",
+  "files": [
+    "bin.js",
+    "lib.js",
+    "follow-redirect-url.js",
+    "scripts/"
+  ],
   "dependencies": {
     "undici": "^7.22.0"
   },
@@ -14,7 +20,11 @@
   },
   "scripts": {
     "test": "nyc mocha --reporter spec --exit test",
-    "coverage": "nyc report --reporter=lcov"
+    "coverage": "nyc report --reporter=lcov",
+    "verify:pack": "node scripts/verify_pack.js",
+    "prepack": "npm run verify:pack",
+    "prepublishOnly": "npm test",
+    "postinstall": "node scripts/postinstall.js"
   },
   "author": "Sayed Tauseef Naqvi",
   "license": "ISC",

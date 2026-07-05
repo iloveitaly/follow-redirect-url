@@ -36,6 +36,56 @@ const start = () => {
   app.get('/307', (req, res) => res.redirect(307, 'http://localhost:9000/1'));
   app.get('/308', (req, res) => res.redirect(308, 'http://localhost:9000/1'));
 
+  app.get('/article/123', (req, res) => {
+    res.redirect(301, '/article/123/%D9%85%D8%AD%D9%85%D8%AF');
+  });
+
+  app.get('/article/123/:slug', (req, res) => {
+    res.send('article');
+  });
+
+  app.get('/unicode-redirect', (req, res) => {
+    res.redirect(302, '/article/123/%D9%85%D8%AD%D9%85%D8%AF-%D8%B5%D9%84%D8%A7%D8%AD');
+  });
+
+  app.get('/meta-arabic', (req, res) => {
+    res.send(
+      '<meta http-equiv="refresh" content="0; url=/article/123/%D9%85%D8%AD%D9%85%D8%AF">',
+    );
+  });
+
+  app.get('/meta-arabic-upper', (req, res) => {
+    res.send(
+      '<meta http-equiv="refresh" content="0; URL=/article/123/%D9%85%D8%AD%D9%85%D8%AF">',
+    );
+  });
+
+  app.get('/redirect-hop', (req, res) => {
+    res.redirect(302, '/redirect-hop/land');
+  });
+
+  app.get('/redirect-hop/land', (req, res) => {
+    if (req.get('Sec-Fetch-Site') === 'same-origin' && req.get('Referer') === 'http://localhost:9000/redirect-hop') {
+      res.send('ok');
+    } else {
+      res.status(400).send('missing redirect headers');
+    }
+  });
+
+  app.get('/check-ua', (req, res) => {
+    const ua = req.get('User-Agent') || '';
+    if (ua.includes('Chrome/149')) {
+      res.send('ok');
+    } else {
+      res.status(400).send('bad ua');
+    }
+  });
+
+  app.get('/cloudflare-block', (req, res) => {
+    res.set('server', 'cloudflare');
+    res.status(403).send('<title>Attention Required! | Cloudflare</title>');
+  });
+
   app.get('/:number', (req, res) => {
     let number = req.params.number;
     if (number > 1) {
