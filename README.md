@@ -58,11 +58,12 @@ The first argument is a `url` string.
 
 const followRedirect = require('follow-redirect-url');
 
-followRedirect.startFollowing('https://bit.ly/2X7gCIT').then(urls => {
+async function main() {
+    const urls = await followRedirect.startFollowing('https://bit.ly/2X7gCIT');
     console.log(urls);
-}).catch(error => {
-    console.log(error)
-})
+}
+
+main().catch(console.error);
 ```
 [back to top](#table-of-contents)
 
@@ -115,14 +116,15 @@ const followRedirect = require('follow-redirect-url');
 const options = {
     max_redirect_length: 5,
     request_timeout: 5000,
-    ignoreSsslErrors: true
+    ignoreSslErrors: true
 };
 
-followRedirect.startFollowing('https://bit.ly/2X7gCIT', options).then(urls => {
+async function main() {
+    const urls = await followRedirect.startFollowing('https://bit.ly/2X7gCIT', options);
     console.log(urls);
-}).catch(error => {
-    console.log(error)
-})
+}
+
+main().catch(console.error);
 ```
 
 [back to top](#table-of-contents)

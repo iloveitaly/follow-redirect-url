@@ -49,20 +49,9 @@ const parseArgs = (argv) => {
   return { url, headers };
 };
 
-const follow = (url) =>
-  followRedirect
-    .startFollowing(url)
-    .then((visits) =>
-      visits
-        .map((v) =>
-          v.redirect
-            ? `${v.url} -> ${v.status}`
-            : `${v.url} -> ${v.status || ""}`,
-        )
-        .forEach((v) => console.log(v)),
-    );
+const formatVisit = (v) => v.redirect ? `${v.url} -> ${v.status}` : `${v.url} -> ${v.status || ""}`;
 
-try {
+const main = async () => {
   const { url, headers } = parseArgs(process.argv);
   if (!url) {
     console.log('Usage: follow <URL> [-H "Header: value"]...');
@@ -70,18 +59,14 @@ try {
   }
 
   const options = Object.keys(headers).length > 0 ? { headers } : undefined;
-  followRedirect
-    .startFollowing(url, options)
-    .then((visits) =>
-      visits
-        .map((v) =>
-          v.redirect
-            ? `${v.url} -> ${v.status}`
-            : `${v.url} -> ${v.status || ""}`,
-        )
-        .forEach((v) => console.log(v)),
-    );
-} catch (e) {
+  const visits = await followRedirect.startFollowing(url, options);
+
+  for (const v of visits) {
+    console.log(formatVisit(v));
+  }
+};
+
+main().catch((e) => {
   console.error(e.message || String(e));
   process.exit(2);
-}
+});
