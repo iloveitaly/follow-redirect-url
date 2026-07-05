@@ -1,2 +1,23 @@
-tests
+# Tests and fixtures
+test
+
+# CI / dev tooling
 .github
+.nycrc
+coverage
+.nyc_output
+
+# Repo metadata
+.gitignore
+
+# Lock file (library — consumers resolve own deps)
+package-lock.json
+
+# IDE / OS
+.vscode
+.DS_Store
+.cursor
+
+# Logs and temp
+*.log
+npm-debug.log*

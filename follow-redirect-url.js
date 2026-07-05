@@ -2,9 +2,26 @@
 
 const { Agent } = require("undici");
 
+// Latest stable Chrome on Windows — bump when publishing major versions
+const DEFAULT_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
+
 const prefixWithHttp = (url) => {
-  const pattern = new RegExp("^http");
-  return pattern.test(url) ? url : "http://" + url;
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+  if (url.startsWith("/")) {
+    throw new Error("relative URL requires a base URL for resolution");
+  }
+  return `http://${url}`;
+};
+
+const resolveRedirectUrl = (baseUrl, location) => {
+  const trimmed = location.trim();
+  if (!trimmed) {
+    throw new Error("empty redirect location");
+  }
+  return new URL(trimmed, baseUrl).href;
 };
 
 const isRedirect = (status) =>
@@ -15,10 +32,41 @@ const isRedirect = (status) =>
   status === 308;
 
 const extractMetaRefreshUrl = (html) => {
-  const metaRefreshPattern =
-    "(CONTENT|content)=[\"']0;[ ]*(URL|url)=(.*?)([\"']s*>)";
-  const match = html.match(metaRefreshPattern);
-  return match && match.length === 5 ? match[3] : null;
+  const tagMatch = html.match(
+    /<meta[^>]+(?:http-equiv\s*=\s*["']?refresh["']?[^>]+content\s*=\s*["']([^"']+)["']|content\s*=\s*["']([^"']+)["'][^>]+http-equiv\s*=\s*["']?refresh["']?)[^>]*>/i,
+  );
+  const content = tagMatch ? (tagMatch[1] || tagMatch[2]) : null;
+  if (content) {
+    const urlMatch = content.match(/url\s*=\s*(.+)$/i);
+    if (urlMatch) {
+      return urlMatch[1].trim();
+    }
+  }
+
+  const legacyMatch = html.match(/content\s*=\s*["']0;\s*url\s*=\s*([^"'>]+)/i);
+  return legacyMatch ? legacyMatch[1].trim() : null;
+};
+
+const getSecFetchSite = (currentUrl, previousUrl) => {
+  if (!previousUrl) {
+    return "none";
+  }
+  try {
+    const current = new URL(prefixWithHttp(currentUrl));
+    const previous = new URL(prefixWithHttp(previousUrl));
+    return current.origin === previous.origin ? "same-origin" : "cross-site";
+  } catch {
+    return "cross-site";
+  }
+};
+
+const updateNavigationHeaders = (fetchOptions, currentUrl, previousUrl) => {
+  fetchOptions.headers["Sec-Fetch-Site"] = getSecFetchSite(currentUrl, previousUrl);
+  if (previousUrl) {
+    fetchOptions.headers.Referer = prefixWithHttp(previousUrl);
+  } else {
+    delete fetchOptions.headers.Referer;
+  }
 };
 
 const getErrorCode = (error) => {
@@ -33,9 +81,15 @@ const buildFetchOptions = (request_timeout, ignoreSslErrors, extraHeaders) => {
     redirect: "manual",
     signal: AbortSignal.timeout(request_timeout),
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.109 Safari/537.36",
-      Accept: "text/html",
+      "User-Agent": DEFAULT_USER_AGENT,
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "none",
+      "Sec-Fetch-User": "?1",
+      "Upgrade-Insecure-Requests": "1",
       ...extraHeaders,
     },
   };
@@ -48,6 +102,11 @@ const buildFetchOptions = (request_timeout, ignoreSslErrors, extraHeaders) => {
 
   return fetchOptions;
 };
+
+const isCloudflareBlock = (response, text) =>
+  response.status === 403 &&
+  (response.headers.get("server")?.toLowerCase().includes("cloudflare") ||
+    /cloudflare|cf-ray/i.test(text));
 
 const visit = async (url, fetchOptions) => {
   url = prefixWithHttp(url);
@@ -62,7 +121,7 @@ const visit = async (url, fetchOptions) => {
       url: url,
       redirect: true,
       status: response.status,
-      redirectUrl: location,
+      redirectUrl: resolveRedirectUrl(url, location),
     };
   }
 
@@ -74,9 +133,15 @@ const visit = async (url, fetchOptions) => {
           url: url,
           redirect: true,
           status: "200 + META REFRESH",
-          redirectUrl: redirectUrl,
+          redirectUrl: resolveRedirectUrl(url, redirectUrl),
         }
       : { url: url, redirect: false, status: response.status };
+  }
+
+  if (response.status === 403) {
+    const text = await response.text();
+    const blocked = isCloudflareBlock(response, text) ? "cloudflare" : undefined;
+    return { url: url, redirect: false, status: response.status, blocked };
   }
 
   return { url: url, redirect: false, status: response.status };
@@ -113,6 +178,8 @@ const startFollowing = async (url, options = {}) => {
     }
 
     try {
+      const previousUrl = visits.length > 0 ? visits[visits.length - 1].url : null;
+      updateNavigationHeaders(fetchOptions, currentUrl, previousUrl);
       const response = await visit(currentUrl, fetchOptions);
       visits.push(response);
       count++;
@@ -135,3 +202,7 @@ const startFollowing = async (url, options = {}) => {
 };
 
 module.exports.startFollowing = startFollowing;
+module.exports.DEFAULT_USER_AGENT = DEFAULT_USER_AGENT;
+module.exports.resolveRedirectUrl = resolveRedirectUrl;
+module.exports.extractMetaRefreshUrl = extractMetaRefreshUrl;
+module.exports.getSecFetchSite = getSecFetchSite;

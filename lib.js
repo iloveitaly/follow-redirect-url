@@ -1,6 +1,9 @@
 "use strict";
 
+const { version } = require("./package.json");
 const followRedirect = require("./follow-redirect-url");
+
+exports.version = version;
 
 exports.expandUrl = async function (url) {
   const resolvedUrlList = await followRedirect.startFollowing(url, {

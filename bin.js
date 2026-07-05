@@ -2,7 +2,16 @@
 
 "use strict";
 
+const { version } = require("./package.json");
 const followRedirect = require("./follow-redirect-url");
+const {
+  runInstallDoctor,
+  formatDoctorReport,
+} = require("./scripts/install_doctor");
+
+const USAGE =
+  'Usage: follow <URL> [-H "Header: value"]... [-v|--version]\n' +
+  "       follow doctor";
 
 const parseHeaderPair = (s) => {
   const idx = s.indexOf(":");
@@ -26,6 +35,10 @@ const parseArgs = (argv) => {
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
 
+    if (a === "-v" || a === "--version" || a === "-V") {
+      return { mode: "version" };
+    }
+
     if (a === "-H") {
       const v = argv[i + 1];
       if (!v) throw new Error(`Missing value for ${a}`);
@@ -39,22 +52,41 @@ const parseArgs = (argv) => {
       throw new Error(`Unknown option ${JSON.stringify(a)}`);
     }
 
-    if (url)
+    if (url) {
       throw new Error(
         `Multiple URLs provided: ${JSON.stringify(url)} and ${JSON.stringify(a)}`,
       );
+    }
     url = a;
   }
 
-  return { url, headers };
+  if (url === "doctor") {
+    return { mode: "doctor" };
+  }
+
+  return { mode: "follow", url, headers };
 };
 
-const formatVisit = (v) => v.redirect ? `${v.url} -> ${v.status}` : `${v.url} -> ${v.status || ""}`;
+const formatVisit = (v) =>
+  v.redirect ? `${v.url} -> ${v.status}` : `${v.url} -> ${v.status || ""}`;
 
 const main = async () => {
-  const { url, headers } = parseArgs(process.argv);
+  const parsed = parseArgs(process.argv);
+
+  if (parsed.mode === "version") {
+    console.log(`follow-redirect-url/${version}`);
+    return;
+  }
+
+  if (parsed.mode === "doctor") {
+    const report = runInstallDoctor();
+    console.log(formatDoctorReport(report));
+    process.exit(report.ok ? 0 : 1);
+  }
+
+  const { url, headers } = parsed;
   if (!url) {
-    console.log('Usage: follow <URL> [-H "Header: value"]...');
+    console.log(USAGE);
     process.exit(1);
   }
 
@@ -63,6 +95,16 @@ const main = async () => {
 
   for (const v of visits) {
     console.log(formatVisit(v));
+  }
+
+  const last = visits[visits.length - 1];
+  if (last?.blocked === "cloudflare") {
+    console.error(
+      "\nBlocked by Cloudflare (browser-only access). " +
+        "The site may HTTP-redirect to a longer URL in a real browser, " +
+        "but CLI requests are stopped before that redirect. " +
+        'Try -H "Cookie: ..." with cookies from your browser.',
+    );
   }
 };
 

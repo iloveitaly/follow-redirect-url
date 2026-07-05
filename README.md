@@ -26,19 +26,30 @@ Also added User-Agent header to requests, some web address won't redirect withou
 - [Usage](#usage)
 - [Output](#output)
 - [Options](#options)
+- [Troubleshooting](#troubleshooting)
 
 
 ## Installation
 
 ### Install with npm globally (For CLI):
-```
-npm install -g follow-redirect-url
+
+```bash
+npm install -g follow-redirect-url@latest
 ```
 
 ### Install for your project:
+
+```bash
+npm install --save follow-redirect-url
 ```
-npm install -save follow-redirect-url
+
+### Verify install
+
+```bash
+follow --version
+follow doctor
 ```
+
 [back to top](#table-of-contents)
 
 
@@ -47,8 +58,10 @@ npm install -save follow-redirect-url
 
 ### CLI:
 
-```
+```bash
 follow https://bit.ly/2X7gCIT
+follow --version
+follow doctor
 ```
 
 ### Module:
@@ -65,6 +78,14 @@ async function main() {
 
 main().catch(console.error);
 ```
+
+Programmatic version:
+
+```js
+const { version } = require('follow-redirect-url');
+console.log(version);
+```
+
 [back to top](#table-of-contents)
 
 
@@ -78,6 +99,8 @@ https://bit.ly/2X7gCIT -> 301
 http://github.com/sthnaqvi/follow-redirect-url -> 301
 https://github.com/sthnaqvi/follow-redirect-url -> 200
 ```
+
+Arabic and other Unicode paths are shown percent-encoded in the redirect chain (same as a browser address bar).
 
 ### Project Result:
 ```
@@ -101,7 +124,9 @@ https://github.com/sthnaqvi/follow-redirect-url -> 200
 
 ### CLI options:
 
-#### Under development
+- `-v`, `--version`, `-V` — print package version
+- `-H "Header: value"` — send custom request headers
+- `follow doctor` — check for stale duplicate global installs
 
 ### Module options:
 The second argument is an `options` object. Options are optional.
@@ -109,7 +134,7 @@ The second argument is an `options` object. Options are optional.
 - `max_redirect_length` - maximum redirection limit. Default: `20`
 - `request_timeout` - request timeout in milliseconds. Default: `10000`
 - `ignoreSslErrors` - ignore SSL certificate errors when following redirects. Default: `false`
--
+
 ``` js
 const followRedirect = require('follow-redirect-url');
 
@@ -126,5 +151,46 @@ async function main() {
 
 main().catch(console.error);
 ```
+
+**Note:** URL fragments (`#section`) are not part of HTTP redirects and cannot be followed by this tool.
+
+[back to top](#table-of-contents)
+
+
+---
+## Troubleshooting
+
+### Check installed version
+
+```bash
+follow --version
+npm list -g follow-redirect-url
+```
+
+### Stale global install (wrong version running)
+
+If `follow` behaves unexpectedly or shows deprecation warnings despite installing the latest version, an old global binary may be shadowing the new one (e.g. `/usr/local/bin/follow` from an older install).
+
+```bash
+follow doctor
+npm uninstall -g follow-redirect-url --prefix /usr/local
+npm install -g follow-redirect-url@latest
+hash -r
+follow doctor
+```
+
+### Site returns 403
+
+Some sites use Cloudflare or bot protection. The CLI sends a modern browser User-Agent and `Accept-Language` by default, but Cloudflare can still block non-browser clients before any HTTP redirect runs.
+
+Example: `https://www.mobtada.com/sports/1199729` HTTP-redirects in Chrome to the full Arabic slug URL, but `follow` may stop at `403` because Cloudflare blocks the request first. This is not a JavaScript-only redirect — the tool does not execute page scripts.
+
+For protected sites, pass cookies or custom headers from your browser:
+
+```bash
+follow -H "Cookie: your-cookie" https://example.com
+```
+
+Or copy the final URL from your browser address bar after it loads.
 
 [back to top](#table-of-contents)

@@ -4,6 +4,7 @@ const lib = require('../lib');
 const chai = require('chai');
 const expect = chai.expect;
 const webserver = require('./webserver');
+const { version } = require('../package.json');
 
 describe('lib', () => {
 
@@ -26,6 +27,10 @@ describe('lib', () => {
     expect(success).to.equal(false);
     expect(result.redirect).to.equal(false);
     expect(result.error).to.be.oneOf(['ENOTFOUND', 'EAI_AGAIN']);
+  });
+
+  it('should export package version', () => {
+    expect(lib.version).to.equal(version);
   });
 
 });
